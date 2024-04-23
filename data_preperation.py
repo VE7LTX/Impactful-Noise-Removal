@@ -99,62 +99,55 @@ def add_noise(clean_audio: np.ndarray, noise_audio: np.ndarray, snr: float) -> n
     
     return noisy_audio
 
+import numpy as np
+import librosa
 
-def audio_to_spectrogram_chunked(audio: np.ndarray, n_fft: int = 1024, hop_length: int = 512, chunk_width: int = 173, max_length_seconds: float = 5.0, sample_rate: int = 22050, overlap: float = 0.5) -> list:
+def audio_to_combined_features(audio: np.ndarray, sample_rate: int, n_fft: int = 1024, hop_length: int = 512, n_mfcc: int = 13, max_length_seconds: float = 5.0) -> list:
     """
-    Convert an audio waveform to a series of spectrogram chunks, processing the audio in smaller segments to reduce memory usage.
-    
+    Extract combined spectrogram and MFCC features from audio in chunked segments.
+
     Parameters:
     - audio: Audio data as a numpy array.
-    - n_fft: FFT window size.
-    - hop_length: Hop length for STFT.
-    - chunk_width: Desired width of each spectrogram chunk.
-    - max_length_seconds: Maximum length of audio segments to process at a time, in seconds.
     - sample_rate: Sampling rate of the audio.
-    - overlap: Proportion of overlap between chunks.
+    - n_fft: FFT window size for the spectrogram.
+    - hop_length: Hop length for both STFT and MFCC.
+    - n_mfcc: Number of MFCCs to extract.
+    - max_length_seconds: Maximum length of audio segments to process at a time, in seconds.
     
     Returns:
-    - List of spectrogram chunks with a channel dimension added.
+    - List of combined feature chunks with a channel dimension added.
     """
     max_length_samples = int(max_length_seconds * sample_rate)
     total_samples = len(audio)
-    chunks_with_channel = []
+    combined_chunks = []
 
     for start in range(0, total_samples, max_length_samples):
         end = min(start + max_length_samples, total_samples)
         audio_segment = audio[start:end]
-        
-        # Convert segment to float16 to reduce memory usage
-        audio_segment = audio_segment.astype(np.float16)
-        
-        S = librosa.stft(audio_segment, n_fft=n_fft, hop_length=hop_length)
-        spectrogram_segment = np.abs(S).astype(np.float32)  # Convert back to float32 for further processing
-        
-        # Calculate the step size for chunks based on the overlap
-        chunk_step = int(chunk_width * (1 - overlap))
-        
-        # Split the spectrogram segment into overlapping chunks
-        segment_chunks = [spectrogram_segment[:, i:i + chunk_width] for i in range(0, spectrogram_segment.shape[1] - chunk_width + 1, chunk_step)]
-        
-        # Add a channel dimension to each chunk
-        segment_chunks_with_channel = [chunk[..., np.newaxis] for chunk in segment_chunks]
-        chunks_with_channel.extend(segment_chunks_with_channel)
-    
-    return chunks_with_channel
 
+        # Compute the spectrogram
+        S = librosa.stft(audio_segment, n_fft=n_fft, hop_length=hop_length)
+        spectrogram = np.abs(S)
+
+        # Compute MFCCs
+        mfccs = librosa.feature.mfcc(y=audio_segment, sr=sample_rate, n_mfcc=n_mfcc, n_fft=n_fft, hop_length=hop_length)
+
+        # Normalize the spectrogram to decibels
+        spectrogram_db = librosa.amplitude_to_db(spectrogram, ref=np.max)
+
+        # Combine spectrogram and MFCCs along the frequency axis
+        combined_features = np.vstack([spectrogram_db, mfccs])
+
+        # Adding channel dimension for compatibility with CNN input requirements
+        combined_features_with_channel = combined_features[..., np.newaxis]
+
+        combined_chunks.append(combined_features_with_channel)
+
+    return combined_chunks
 
 def prepare_dataset(clean_files: list, noise_dirs: list, snrs: list, split_ratio: float = 0.8) -> tuple:
     """
-    Prepare the dataset by loading, augmenting, and splitting into training and validation sets.
-    
-    Parameters:
-    - clean_files: List of paths to clean audio files.
-    - noise_dirs: List of directories containing noise audio files.
-    - snrs: List of SNR levels to use for noise addition.
-    - split_ratio: Ratio to split the dataset into training and validation sets.
-    
-    Returns:
-    - Tuple of (train_data, val_data).
+    Prepare the dataset by loading, augmenting, and splitting into training and validation sets using combined features.
     """
     augmented_data = []
 
@@ -165,9 +158,9 @@ def prepare_dataset(clean_files: list, noise_dirs: list, snrs: list, split_ratio
             file_augmented_data = []
             for snr in snrs:
                 noisy_audio = add_noise(clean_audio, noise_audio, snr)
-                noisy_chunks = audio_to_spectrogram_chunked(noisy_audio)
-                clean_chunks = audio_to_spectrogram_chunked(clean_audio)
-                file_augmented_data.extend(list(zip(noisy_chunks, clean_chunks)))
+                combined_chunks = audio_to_combined_features(noisy_audio, sr)
+                clean_combined_chunks = audio_to_combined_features(clean_audio, sr)
+                file_augmented_data.extend(list(zip(combined_chunks, clean_combined_chunks)))
             return file_augmented_data
         except Exception as e:
             print(f"Failed processing {clean_file} or {noise_file}: {str(e)}")
@@ -177,14 +170,9 @@ def prepare_dataset(clean_files: list, noise_dirs: list, snrs: list, split_ratio
         futures = []
         for clean_file in clean_files:
             for noise_dir in noise_dirs:
-                try:
-                    noise_files = [os.path.join(noise_dir, f) for f in os.listdir(noise_dir) if f.endswith('.wav')]
-                    for noise_file in noise_files:
-                        futures.append(executor.submit(process_file_combinations, clean_file, noise_file))
-                except FileNotFoundError:
-                    print(f"Directory not found: {noise_dir}")
-                except Exception as e:
-                    print(f"Error reading from directory {noise_dir}: {str(e)}")
+                noise_files = [os.path.join(noise_dir, f) for f in os.listdir(noise_dir) if f.endswith('.wav')]
+                for noise_file in noise_files:
+                    futures.append(executor.submit(process_file_combinations, clean_file, noise_file))
         
         for future in futures:
             augmented_data.extend(future.result())
@@ -198,7 +186,6 @@ def prepare_dataset(clean_files: list, noise_dirs: list, snrs: list, split_ratio
     val_data = augmented_data[split_index:]
 
     return train_data, val_data
-
 
 
 # Example usage

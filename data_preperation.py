@@ -1,48 +1,29 @@
 """
 Audio Processing for Noise Reduction
 
-This script is designed to handle the preparation of audio datasets for training machine learning models
-focused on noise reduction. This involves loading audio files, adding synthesized noise at specified levels,
-converting audio into spectrogram chunks, and preparing datasets for training and validation.
+This Python script is dedicated to the preparation and handling of audio datasets for training machine learning models focused on noise reduction. The script includes functions for loading audio files, synthesizing noise at specified signal-to-noise ratios, and extracting combined audio features (spectrograms and Mel Frequency Cepstral Coefficients, MFCCs). These combined features are crucial for training robust models capable of distinguishing speech from background noise in complex acoustic environments.
 
-Functions:
-- load_audio_file(file_path, sample_rate): Loads an audio file using the librosa library, which is
-  popular for audio and music analysis. The function returns the audio data along with its sample rate.
+The script is structured to perform the following tasks:
+- Load audio data from specified file paths using the librosa library, which is widely recognized for its powerful audio processing capabilities.
+- Synthesize and add noise to clean audio samples to simulate various noisy conditions, essential for creating realistic training scenarios.
+- Extract combined features (spectrograms and MFCCs) from audio data. This is performed in chunked segments to manage memory usage effectively and to prepare the data for input into convolutional neural networks (CNNs), which benefit from this combined feature approach.
+- Organize audio data by loading, augmenting, and then splitting it into training and validation sets to ensure thorough evaluation and validation of the machine learning model. This process utilizes multi-threading to enhance efficiency, particularly useful when handling large datasets.
+- Save processed data to disk for persistent access and future training sessions.
+- Visually inspect the extracted features using matplotlib to ensure data integrity and to understand the characteristics of the processed audio.
 
-- add_noise(clean_audio, noise_audio, snr): Adds noise to a clean audio sample at a specified signal-to-noise
-  ratio (SNR). This is crucial for creating training data that simulates various noisy environments.
+Libraries Used:
+- os: For directory and file operations.
+- librosa: For loading and transforming audio files.
+- numpy: For high-performance numerical operations.
+- random: For shuffling data to ensure a randomized split between training and validation sets.
+- matplotlib.pyplot: For visualizing data, crucial for verifying the correct processing of audio features.
+- concurrent.futures: For parallel processing to expedite the preparation of the dataset.
 
-- audio_to_spectrogram_chunked(audio, n_fft, hop_length, chunk_width, max_length_seconds, sample_rate, overlap):
-  Converts audio data into spectrogram chunks using Short-Time Fourier Transform (STFT). This is useful for
-  breaking down audio into manageable parts for deep learning models, which often rely on spectrograms for
-  feature extraction.
-
-- prepare_dataset(clean_files, noise_dirs, snrs, split_ratio): Orchestrates the loading of audio files,
-  addition of noise, and the splitting of data into training and validation sets. It utilizes multi-threading
-  to enhance processing efficiency, handling potentially large datasets by parallelizing file operations.
-
-The script also includes an example usage section that demonstrates how to define file paths, prepare the dataset,
-and save it for future use. This is particularly aimed at scenarios requiring robust models for environments
-with varying noise levels, such as industrial settings or public spaces where background noise can significantly
-impact audio clarity.
-
-This modular approach not only facilitates extensive customization and testing of different audio processing
-strategies but also ensures scalability and adaptability to different project requirements or research goals.
-
-Libraries:
-- os: For handling file and directory operations.
-- librosa: For audio loading and transformation.
-- numpy: For numerical operations on arrays.
-- random: For shuffling data to ensure randomized splits.
-- matplotlib.pyplot: For visualizing spectrograms for analysis and verification.
-- concurrent.futures: For parallelizing data processing to speed up the dataset preparation phase.
-
-Example Use Case:
-The provided code is prepared to be executed in environments where Python and the required libraries are installed.
-It demonstrates loading specified audio files, adding controlled noise, transforming these into spectrograms,
-and finally preparing them into structured datasets ready for model training and validation.
+Example Usage:
+The script is executed within an environment where Python and all required libraries are installed. It demonstrates the complete workflow from defining file paths, processing audio files to extract features, preparing the dataset, and finally visualizing the prepared data. This is particularly aimed at scenarios requiring robust noise reduction models for environments like industrial settings or urban areas, where background noise can significantly impact the clarity of audio communications.
 
 """
+
 
 approach import os
 import librosa
@@ -51,6 +32,7 @@ import random
 import matplotlib.pyplot as plt
 import os
 from concurrent.futures import ThreadPoolExecutor
+
 
 def load_audio_file(file_path: str, sample_rate: int = 22050) -> tuple:
     """
@@ -190,46 +172,48 @@ def prepare_dataset(clean_files: list, noise_dirs: list, snrs: list, split_ratio
 
 # Example usage
 if __name__ == "__main__":
-    # Define your clean audio files and noise directories
-    # Clean audio file paths
-    clean_files = [
-        r"C:\!code\clean_audio\wav\historyamericanrevolutionvol3_01_warren_64kb.wav",
-        r"C:\!code\clean_audio\wav\historyamericanrevolutionvol3_02_warren_64kb.wav",
-        r"C:\!code\clean_audio\wav\historyamericanrevolutionvol3_03_warren_64kb.wav",
-        r"C:\!code\clean_audio\wav\historyamericanrevolutionvol3_04_warren_64kb.wav",
-        r"C:\!code\clean_audio\wav\historyamericanrevolutionvol3_05_warren_64kb.wav"
-    ]
 
-    # Noise directories from the Urbansound8k Dataset
-    noise_dirs = [r"C:\!code\unclean_audio\fold" + str(i) for i in range(1, 11)]
+  # Define your clean audio files and noise directories
+  clean_files = [
+      r"C:\!code\clean_audio\wav\historyamericanrevolutionvol3_01_warren_64kb.wav",
+      r"C:\!code\clean_audio\wav\historyamericanrevolutionvol3_02_warren_64kb.wav",
+      r"C:\!code\clean_audio\wav\historyamericanrevolutionvol3_03_warren_64kb.wav",
+      r"C:\!code\clean_audio\wav\historyamericanrevolutionvol3_04_warren_64kb.wav",
+      r"C:\!code\clean_audio\wav\historyamericanrevolutionvol3_05_warren_64kb.wav"
+  ]
+  
+  # Noise directories from the Urbansound8k Dataset
+  noise_dirs = [r"C:\!code\unclean_audio\fold" + str(i) for i in range(1, 11)]
+  
+  # Example SNR values
+  snrs = [0, -15, -50]
+  
+  # Prepare the dataset
+  train_data, val_data = prepare_dataset(clean_files, noise_dirs, snrs)
+  
+  # Example of saving the training and validation data
+  np.save('train_data.npy', train_data)
+  np.save('val_data.npy', val_data)
+  
+  # Load the training and validation data from their respective files.
+  try:
+      train_data_loaded = np.load('train_data.npy', allow_pickle=True)
+      val_data_loaded = np.load('val_data.npy', allow_pickle=True)
+  except FileNotFoundError as e:
+      # If the files are not found, raise an informative error.
+      raise FileNotFoundError("Training or validation data file not found. Ensure the files 'train_data.npy' and 'val_data.npy' exist in the directory.") from e
+  
+  # Extract the first combined feature chunk (spectrogram and MFCCs) from the loaded training data.
+  # This involves selecting the second element of the first tuple in the array and squeezing it to remove any singleton dimensions.
+  combined_features_chunk = train_data_loaded[0][1].squeeze()
+  
+  # Plot the combined feature chunk using matplotlib.
+  # This visualization helps in understanding the structure and quality of the spectrogram and MFCC combined.
+  plt.figure(figsize=(10, 4))
+  plt.imshow(combined_features_chunk, aspect='auto', origin='lower')
+  plt.title('Combined Spectrogram and MFCC Chunk')
+  plt.xlabel('Time Steps')
+  plt.ylabel('Frequency Bins')
+  plt.colorbar(label='Magnitude')
+  plt.show()
 
-    snrs = [0, -15, -50]  # Example SNR values
-
-    # Prepare the dataset
-    train_data, val_data = prepare_dataset(clean_files, noise_dirs, snrs)
-
-    # Example of saving the training and validation data
-    np.save('train_data.npy', train_data)
-    np.save('val_data.npy', val_data)
-    # ! Load the training and validation data from their respective files.
-    # * This process involves using numpy's load function with 'allow_pickle=True' to handle the structured array.
-    try:
-        train_data_loaded = np.load('train_data.npy', allow_pickle=True)
-        val_data_loaded = np.load('val_data.npy', allow_pickle=True)
-    except FileNotFoundError as e:
-        # If the files are not found, raise an informative error.
-        raise FileNotFoundError("Training or validation data file not found. Ensure the files 'train_data.npy' and 'val_data.npy' exist in the directory.") from e
-    
-    # * Extract the first clean spectrogram chunk from the loaded training data.
-    # This involves selecting the second element of the first tuple in the array and squeezing it to remove any singleton dimensions.
-    clean_spec_chunk = train_data_loaded[0][1].squeeze()
-    
-    # * Plot the clean spectrogram chunk using matplotlib.
-    # This visualization helps in understanding the structure and quality of the spectrogram.
-    plt.figure(figsize=(10, 4))
-    plt.imshow(clean_spec_chunk, aspect='auto', origin='lower')
-    plt.title('Clean Spectrogram Chunk')
-    plt.xlabel('Time Steps')
-    plt.ylabel('Frequency Bins')
-    plt.colorbar(label='Magnitude')
-    plt.show()

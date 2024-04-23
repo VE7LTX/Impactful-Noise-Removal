@@ -99,6 +99,7 @@ def add_noise(clean_audio: np.ndarray, noise_audio: np.ndarray, snr: float) -> n
     
     return noisy_audio
 
+
 def audio_to_spectrogram_chunked(audio: np.ndarray, n_fft: int = 1024, hop_length: int = 512, chunk_width: int = 173, max_length_seconds: float = 5.0, sample_rate: int = 22050, overlap: float = 0.5) -> list:
     """
     Convert an audio waveform to a series of spectrogram chunks, processing the audio in smaller segments to reduce memory usage.
@@ -140,6 +141,7 @@ def audio_to_spectrogram_chunked(audio: np.ndarray, n_fft: int = 1024, hop_lengt
         chunks_with_channel.extend(segment_chunks_with_channel)
     
     return chunks_with_channel
+
 
 def prepare_dataset(clean_files: list, noise_dirs: list, snrs: list, split_ratio: float = 0.8) -> tuple:
     """
@@ -196,6 +198,7 @@ def prepare_dataset(clean_files: list, noise_dirs: list, snrs: list, split_ratio
     val_data = augmented_data[split_index:]
 
     return train_data, val_data
+
 
 
 # Example usage

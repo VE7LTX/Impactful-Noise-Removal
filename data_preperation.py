@@ -1,4 +1,5 @@
 """
+data_preperation.py
 Audio Processing for Noise Reduction
 
 This Python script is dedicated to the preparation and handling of audio datasets for training machine learning models focused on noise reduction. The script includes functions for loading audio files, synthesizing noise at specified signal-to-noise ratios, and extracting combined audio features (spectrograms and Mel Frequency Cepstral Coefficients, MFCCs). These combined features are crucial for training robust models capable of distinguishing speech from background noise in complex acoustic environments.
